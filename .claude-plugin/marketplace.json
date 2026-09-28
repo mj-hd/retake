@@ -1,0 +1,18 @@
+{
+  "name": "retake",
+  "description": "Browser-based visual review workflow for AI coding agents",
+  "owner": {
+    "name": "mj-hd",
+    "url": "https://github.com/mj-hd"
+  },
+  "plugins": [
+    {
+      "name": "retake",
+      "source": "./",
+      "displayName": "retake",
+      "description": "Review and revise designs, documents, code, images, PDFs, video, web pages, and Pencil exports in a browser",
+      "category": "development",
+      "keywords": ["review", "annotation", "visual", "mcp", "agent-skill"]
+    }
+  ]
+}

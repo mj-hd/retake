@@ -1,0 +1,18 @@
+[package]
+name = "retake-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+retake-core = { path = "../retake-core" }
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+parking_lot.workspace = true
+sha2.workspace = true
+hex.workspace = true
+rand.workspace = true

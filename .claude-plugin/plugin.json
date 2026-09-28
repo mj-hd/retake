@@ -1,0 +1,14 @@
+{
+  "name": "retake",
+  "version": "0.1.0",
+  "description": "Browser-based visual review workflow for AI coding agents",
+  "author": {
+    "name": "mj-hd",
+    "url": "https://github.com/mj-hd"
+  },
+  "homepage": "https://github.com/mj-hd/retake",
+  "repository": "https://github.com/mj-hd/retake",
+  "license": "MIT",
+  "skills": ["./.agents/skills/retake"],
+  "keywords": ["review", "annotation", "visual", "mcp", "agent-skill"]
+}

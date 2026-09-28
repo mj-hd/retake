@@ -1,0 +1,45 @@
+# Rust
+target/
+**/*.rs.bk
+# Cargo.lock is committed for applications (reproducible builds)
+
+# Node / UI
+node_modules/
+dist/
+*.local
+.vite/
+*.tsbuildinfo
+# Local MCP paths and generated Vite config outputs
+/opencode.json
+/ui/vite.config.js
+/ui/vite.config.d.ts
+
+# Workers
+workers/*/node_modules/
+workers/*/dist/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-*
+
+# Logs / Temp
+*.log
+tmp/
+temp/
+*.tmp
+
+# Playwright
+playwright-report/
+test-results/
+
+# Misc
+.env
+.env.local
+*.pem
+*.key

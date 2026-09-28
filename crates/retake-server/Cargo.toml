@@ -1,0 +1,37 @@
+[package]
+name = "retake-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "retake"
+path = "src/main.rs"
+
+[dependencies]
+retake-core = { path = "../retake-core" }
+retake-store = { path = "../retake-store" }
+retake-renderers = { path = "../retake-renderers" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+axum.workspace = true
+tower-http.workspace = true
+tower.workspace = true
+tokio.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+parking_lot.workspace = true
+tokio-util.workspace = true
+futures.workspace = true
+base64.workspace = true
+reqwest.workspace = true
+async-trait.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
