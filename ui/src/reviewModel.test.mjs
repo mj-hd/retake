@@ -4,6 +4,7 @@ import {
   deriveReviewPresentation,
   filterAnnotationsForSnapshots,
   groupSnapshots,
+  isLatestRevisionComplete,
   mergePendingRevision,
   selectionCenter,
   snapshotGroupIndex,
@@ -73,6 +74,35 @@ test('keeps an optimistic revision while the server is still updating', () => {
     snapshots: [],
     revisions: [first, optimistic],
   });
+});
+
+test('only treats a populated revision after updating as complete', () => {
+  const first = { number: 1, created_at: '2026-01-01T00:00:00Z', snapshots: [snapshot('first')] };
+  const draft = { number: 2, created_at: '2026-01-01T00:01:00Z', snapshots: [] };
+  const completed = { ...draft, snapshots: [snapshot('second')] };
+
+  assert.equal(
+    isLatestRevisionComplete({ review_id: 'review', status: 'updating', snapshots: [], revisions: [first, draft] }),
+    false,
+  );
+  assert.equal(
+    isLatestRevisionComplete({
+      review_id: 'review',
+      status: 'updating',
+      snapshots: completed.snapshots,
+      revisions: [first, completed],
+    }),
+    false,
+  );
+  assert.equal(
+    isLatestRevisionComplete({
+      review_id: 'review',
+      status: 'pending',
+      snapshots: completed.snapshots,
+      revisions: [first, completed],
+    }),
+    true,
+  );
 });
 
 test('removes annotations whose snapshots are from another revision', () => {

@@ -38,6 +38,11 @@ export function latestRevisionNumber(review: ReviewData | null): number {
   return review?.revisions?.[review.revisions.length - 1]?.number ?? 1;
 }
 
+export function isLatestRevisionComplete(review: ReviewData): boolean {
+  const latest = review.revisions?.[review.revisions.length - 1];
+  return review.status !== 'updating' && Boolean(latest?.snapshots.length);
+}
+
 export function activeGroupIndex(selectedGroup: number, groupCount: number): number {
   return Math.min(selectedGroup, Math.max(0, groupCount - 1));
 }

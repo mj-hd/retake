@@ -15,6 +15,7 @@ import {
   deriveReviewPresentation,
   filterAnnotationsForSnapshots,
   groupSnapshots,
+  isLatestRevisionComplete,
   mergePendingRevision,
   selectionCenter,
   snapshotGroupIndex,
@@ -108,9 +109,10 @@ export default function App() {
           const previousLatest = latestRevisionRef.current;
           const firstLoad = !reviewLoadedRef.current;
           const pendingRevision = pendingRevisionRef.current;
-          const waitingForRevision = pendingRevision !== null && latest < pendingRevision;
-          const revisionArrived = pendingRevision !== null && latest >= pendingRevision;
-          const hasNewRevision = !firstLoad && latest > previousLatest;
+          const revisionComplete = isLatestRevisionComplete(data);
+          const revisionArrived = pendingRevision !== null && latest >= pendingRevision && revisionComplete;
+          const waitingForRevision = pendingRevision !== null && !revisionArrived;
+          const hasNewRevision = !firstLoad && latest > previousLatest && revisionComplete;
           if (hasNewRevision && !revisionArrived) beginViewTransition();
           setSelectedRevision((current) => {
             if (waitingForRevision) return current;
@@ -123,7 +125,7 @@ export default function App() {
             setDraft(null);
             setActive(null);
           }
-          latestRevisionRef.current = latest;
+          if (revisionComplete) latestRevisionRef.current = latest;
           if (revisionArrived) pendingRevisionRef.current = null;
           reviewLoadedRef.current = true;
           if (firstLoad && data.annotations) {
