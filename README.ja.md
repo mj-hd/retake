@@ -54,7 +54,7 @@ cargo build --release -p retake-server
 
 </details>
 
-### 2. Skillのインストール（推奨）
+### 2. Skillのインストール
 
 同梱のスキルは [Agent Skills](https://agentskills.io/) 形式です。複数のエージェントへまとめて導入する場合は [`skills`](https://github.com/vercel-labs/skills) が簡単です
 
