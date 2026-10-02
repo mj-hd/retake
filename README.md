@@ -54,7 +54,7 @@ cargo build --release -p retake-server
 
 </details>
 
-### 2. Install the Skill (recommended)
+### 2. Install the Skill
 
 The bundled skill follows the [Agent Skills](https://agentskills.io/) standard. The easiest multi-agent installation uses [`skills`](https://github.com/vercel-labs/skills):
 
