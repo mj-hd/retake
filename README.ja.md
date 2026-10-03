@@ -4,7 +4,7 @@
 
 AIエージェントが生成したデザイン、文書、コードを、ブラウザ上で確認して修正依頼できるレビュー環境です
 
-https://github.com/user-attachments/assets/cf0c7a48-ad9f-43ce-8cbc-8a5a90331442
+https://github.com/user-attachments/assets/ed6a4a67-906e-4bab-bbe7-f69023da4999
 
 ## 機能
 
