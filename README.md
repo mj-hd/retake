@@ -4,7 +4,7 @@ English · [日本語](README.ja.md)
 
 A browser-based review workspace for commenting on and revising designs, documents, and code produced by AI agents
 
-https://github.com/user-attachments/assets/cf0c7a48-ad9f-43ce-8cbc-8a5a90331442
+https://github.com/user-attachments/assets/ed6a4a67-906e-4bab-bbe7-f69023da4999
 
 ## Features
 
