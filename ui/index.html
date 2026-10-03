@@ -7,11 +7,15 @@
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <title>Retake Review</title>
     <script>
+      let storedTheme = null;
       try {
-        document.documentElement.dataset.theme = localStorage.getItem('retake.theme') === 'light' ? 'light' : 'dark';
-      } catch {
-        document.documentElement.dataset.theme = 'dark';
-      }
+        const stored = localStorage.getItem('retake.theme');
+        if (stored === 'light' || stored === 'dark') storedTheme = stored;
+      } catch {}
+      const theme = storedTheme ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+      document.querySelector('meta[name="theme-color"]').content = theme === 'light' ? '#F4F4F6' : '#191A20';
     </script>
   </head>
   <body>

@@ -7,12 +7,19 @@ import BrandMark from './BrandMark.tsx';
 
 type Theme = 'dark' | 'light';
 
-function initialTheme(): Theme {
+const themeMediaQuery = '(prefers-color-scheme: dark)';
+
+function storedTheme(): Theme | null {
   try {
-    return localStorage.getItem('retake.theme') === 'light' ? 'light' : 'dark';
+    const stored = localStorage.getItem('retake.theme');
+    return stored === 'light' || stored === 'dark' ? stored : null;
   } catch {
-    return 'dark';
+    return null;
   }
+}
+
+function systemTheme(): Theme {
+  return window.matchMedia?.(themeMediaQuery).matches ? 'dark' : 'light';
 }
 
 interface Props {
@@ -31,7 +38,8 @@ export default function Topbar({ editable, onBeforeZoom, onSubmit, onClose }: Pr
   const setZoom = useReviewStore((state) => state.setZoom);
   const annotationCount = useReviewStore((state) => state.annotations.length);
   const [languageOpen, setLanguageOpen] = useState(false);
-  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const themePreference = useRef<Theme | null>(storedTheme());
+  const [theme, setTheme] = useState<Theme>(() => themePreference.current ?? systemTheme());
   const languageRef = useRef<HTMLDivElement | null>(null);
   const t = messages[locale];
 
@@ -46,12 +54,17 @@ export default function Topbar({ editable, onBeforeZoom, onSubmit, onClose }: Pr
     document.documentElement.style.colorScheme = theme;
     const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (themeColor) themeColor.content = theme === 'light' ? '#F4F4F6' : '#191A20';
-    try {
-      localStorage.setItem('retake.theme', theme);
-    } catch {
-      /* storage may be disabled */
-    }
   }, [theme]);
+
+  useEffect(() => {
+    if (themePreference.current) return;
+    const media = window.matchMedia(themeMediaQuery);
+    const followSystemTheme = (event: MediaQueryListEvent) => {
+      if (!themePreference.current) setTheme(event.matches ? 'dark' : 'light');
+    };
+    media.addEventListener('change', followSystemTheme);
+    return () => media.removeEventListener('change', followSystemTheme);
+  }, []);
 
   useEffect(() => {
     if (!languageOpen) return;
@@ -79,7 +92,20 @@ export default function Topbar({ editable, onBeforeZoom, onSubmit, onClose }: Pr
   const zoomOut = useCallback(() => changeZoom((current) => clampZoom(current / 1.25)), [changeZoom]);
   const resetZoom = useCallback(() => changeZoom(1), [changeZoom]);
   const zoomIn = useCallback(() => changeZoom((current) => clampZoom(current * 1.25)), [changeZoom]);
-  const toggleTheme = useCallback(() => setTheme((current) => (current === 'dark' ? 'light' : 'dark')), []);
+  const toggleTheme = useCallback(
+    () =>
+      setTheme((current) => {
+        const next = current === 'dark' ? 'light' : 'dark';
+        themePreference.current = next;
+        try {
+          localStorage.setItem('retake.theme', next);
+        } catch {
+          /* storage may be disabled */
+        }
+        return next;
+      }),
+    [],
+  );
   const toggleLanguage = useCallback(() => setLanguageOpen((current) => !current), []);
   const selectLanguage = useCallback(
     (option: Locale) => {
