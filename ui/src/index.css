@@ -248,7 +248,7 @@ button:disabled {
 .brand {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 12px;
   color: var(--text-primary);
 }
 .brand-mark {
@@ -270,11 +270,12 @@ button:disabled {
   fill: var(--color-accent);
 }
 .brand-wordmark {
-  color: var(--text-primary);
-  font-size: 23px;
-  font-weight: 700;
-  letter-spacing: -0.06em;
-  line-height: 1;
+  display: block;
+  flex: none;
+  width: 97px;
+  height: 20px;
+  overflow: visible;
+  fill: currentColor;
 }
 .topbar-actions {
   display: flex;
@@ -1834,7 +1835,7 @@ button:disabled {
   }
 }
 @media (max-width: 560px) {
-  .brand > span:nth-child(2) {
+  .brand-wordmark {
     display: none;
   }
   .topbar-actions {

@@ -100,9 +100,8 @@ export default function Topbar({ editable, onBeforeZoom, onSubmit, onClose }: Pr
   return (
     <header className="topbar">
       {(status === 'updating' || status === 'submitting') && <span className="topbar-loading" aria-hidden="true" />}
-      <div className="brand">
+      <div className="brand" role="img" aria-label="Retake">
         <BrandMark />
-        <span className="brand-wordmark">Retake</span>
       </div>
       <div className="zoom-controls topbar-zoom">
         <button onClick={zoomOut} aria-label={t.zoomOut}>
