@@ -14,6 +14,16 @@ description = "Remove Retake from selected MCP clients."
 commands.allow = ["remove_clients"]
 
 [[permission]]
+identifier = "allow-open-claude-skills"
+description = "Open Claude's Skills settings page."
+commands.allow = ["open_claude_skills"]
+
+[[permission]]
+identifier = "allow-restart-client"
+description = "Restart a supported desktop MCP client."
+commands.allow = ["restart_client"]
+
+[[permission]]
 identifier = "allow-quit-app"
 description = "Quit the Retake desktop application."
 commands.allow = ["quit_app"]

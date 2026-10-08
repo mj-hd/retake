@@ -11,12 +11,15 @@ export function normalizeClientId(value: string): ClientId {
   return (value === 'open_code' ? 'opencode' : value) as ClientId;
 }
 export type InstallState = 'unavailable' | 'missing' | 'installed' | 'outdated' | 'invalid';
+export type SkillInstallState = 'unavailable' | 'missing' | 'pending' | 'installed' | 'outdated';
 
 export interface ClientStatus {
   id: ClientId;
   state: InstallState;
   config_path: string;
   version: string | null;
+  skill_state: SkillInstallState;
+  restartable: boolean;
   message: string | null;
 }
 
@@ -38,6 +41,14 @@ export function installClients(ids: ClientId[]): Promise<ClientStatus[]> {
 
 export function removeClients(ids: ClientId[]): Promise<ClientStatus[]> {
   return invoke<ClientStatus[]>('remove_clients', { ids }).then(normalize);
+}
+
+export function openClaudeSkills(): Promise<void> {
+  return invoke('open_claude_skills');
+}
+
+export function restartClient(id: ClientId): Promise<void> {
+  return invoke('restart_client', { id });
 }
 
 export function quitDesktopApp(): Promise<void> {

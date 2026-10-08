@@ -12,9 +12,9 @@
 | `html` | ローカルHTML | 固定ビューポートのPNGとキャプチャ時のDOMマップ |
 | `markdown` | ローカルMarkdown | ソース行マッピング付きのスクロール可能な全文PNG |
 | `image` | ローカルPNG、JPEG、WebP | 元の解像度の画像 |
-| `text` | ローカルテキスト | バイト位置マッピング付きのレンダリング済みテキスト |
+| `text` | `.diff`と`.patch`を含むローカルUTF-8テキスト | バイト位置マッピング付きのレンダリング済みテキスト |
 | `adb` | Android端末のserial | スクリーンショットとキャプチャ時のUIAutomator node |
-| `code` | Rust、TypeScript、JavaScript | ソースとsymbolマッピング付きの無限キャンバス |
+| `code` | `.rs`、`.ts`、`.tsx`、`.js`、`.jsx`、`.mjs`、`.mts`、`.cts` | ソースとsymbolマッピング付きの無限キャンバス |
 | `pdf` | ローカルPDF | ページとテキストを対応付けた縦長ドキュメント |
 | `pencil` | Pencil MCPのPNG exportとnode metadata | nodeマッピング付きのexport済みframe |
 | `video` | ローカル動画 | timecode付きのスクロール可能なstoryboard |
@@ -55,6 +55,8 @@ Playwright Chromiumを指定ビューポート（標準は1280×800）で実行�
 ```
 
 画像は元の解像度を維持します。テキストは文字・バイト範囲との対応を保ったレビュー画像へ描画します
+
+UTF-8のgit diffやpatch（`.diff`、`.patch`）には`text`を使います。symbol対応の`code`キャンバスではなく、プレーンテキストとしてレビューします
 
 ## Android（adb）
 

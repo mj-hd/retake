@@ -7,6 +7,51 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::info;
 
+const TARGET_TYPES: &str =
+    "image, text, markdown, web, html, adb, code, pdf, pencil, video, macos_window";
+
+fn target_schema() -> Value {
+    json!({
+        "type": "object",
+        "description": "A review target. Choose the type from the artifact format; do not substitute a different file. Use text for UTF-8 plain text, including .diff and .patch files. Code is limited to .rs, .ts, .tsx, .js, .jsx, .mjs, .mts, and .cts files.",
+        "properties": {
+            "type": {
+                "type": "string",
+                "enum": ["image", "text", "markdown", "web", "html", "adb", "code", "pdf", "pencil", "video", "macos_window"],
+                "description": "Renderer to use. Use text for .txt, .diff, .patch, logs, and other UTF-8 plain text; markdown for .md/.markdown; image for PNG/JPEG/WebP; code only for supported Rust/TypeScript/JavaScript extensions."
+            },
+            "path": {
+                "type": "string",
+                "description": "Absolute local path. Required except for web. For adb, use the device serial; for macos_window, use an app name or absolute .app path."
+            },
+            "url": {
+                "type": "string",
+                "description": "HTTP(S) URL. Required for web targets."
+            },
+            "label": {
+                "type": "string",
+                "description": "Optional display label."
+            },
+            "viewport": {
+                "type": "object",
+                "description": "Optional capture viewport for web, html, or markdown (default 1280x800).",
+                "properties": {
+                    "width": {"type": "integer", "minimum": 1},
+                    "height": {"type": "integer", "minimum": 1}
+                },
+                "required": ["width", "height"],
+                "additionalProperties": false
+            },
+            "metadata": {
+                "type": "object",
+                "description": "Optional renderer-specific metadata, such as Pencil node data, video time range, or macOS window_title."
+            }
+        },
+        "required": ["type"],
+        "additionalProperties": false
+    })
+}
+
 pub async fn run_mcp() -> anyhow::Result<()> {
     configure_stdio()?;
     let store = Arc::new(retake_store::ReviewStore::new());
@@ -104,12 +149,17 @@ async fn serve_mcp_requests(service: Arc<ReviewService>, base_url: &str) -> anyh
                 "tools": [
                     {
                         "name": "open_review",
-                        "description": "Open a review session for targets (image/text/markdown/web/html/adb/code/pdf/pencil/video/macos_window). In the same assistant turn, show the returned URL and immediately call wait_review; never stop after open_review.",
+                        "description": "Open a review session. Supported targets: image (PNG/JPEG/WebP), text (UTF-8, including .diff/.patch), markdown, web, html, adb, code (.rs/.ts/.tsx/.js/.jsx/.mjs/.mts/.cts only), pdf, pencil, video, and macos_window. In the same assistant turn, show the returned URL and immediately call wait_review; never stop after open_review.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "title": {"type": "string"},
-                                "targets": {"type": "array", "items": {"type": "object"}},
+                                "targets": {
+                                    "type": "array",
+                                    "description": "Artifacts to review. For a git diff, write it to a .diff or .patch file and use type text.",
+                                    "items": target_schema(),
+                                    "minItems": 1
+                                },
                                 "open_browser": {"type": "boolean", "description": "Open an owned browser window. It stays open after submit for revisions/diffs and closes on cancel or explicit close (default true)"}
                             },
                             "required": ["targets"]
@@ -134,7 +184,12 @@ async fn serve_mcp_requests(service: Arc<ReviewService>, base_url: &str) -> anyh
                             "type": "object",
                             "properties": {
                                 "review_id": {"type": "string"},
-                                "targets": {"type": "array", "items": {"type": "object"}}
+                                "targets": {
+                                    "type": "array",
+                                    "description": "The same target definitions, in the same order, as open_review.",
+                                    "items": target_schema(),
+                                    "minItems": 1
+                                }
                             },
                             "required": ["review_id", "targets"]
                         }
@@ -338,7 +393,11 @@ fn parse_targets(args: &Value) -> Result<Vec<Target>, String> {
             "pencil" => TargetKind::Pencil,
             "video" => TargetKind::Video,
             "macos_window" | "macos-window" => TargetKind::MacosWindow,
-            _ => return Err("unknown type".into()),
+            _ => {
+                return Err(format!(
+                    "unknown target type '{kind_str}'; supported types: {TARGET_TYPES}"
+                ))
+            }
         };
         let path = t
             .get("path")
@@ -448,7 +507,7 @@ async fn handle_wait_review(service: Arc<ReviewService>, args: &Value) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::{find_runtime_path_from, forward_lines, parse_targets};
+    use super::{find_runtime_path_from, forward_lines, parse_targets, target_schema};
     use retake_core::TargetKind;
     use std::{fs, io::Cursor};
     use tokio::sync::mpsc;
@@ -478,6 +537,29 @@ mod tests {
             .unwrap();
             assert_eq!(targets[0].kind, TargetKind::MacosWindow);
         }
+    }
+
+    #[test]
+    fn target_schema_exposes_formats_and_fields() {
+        let schema = target_schema();
+        let types = schema["properties"]["type"]["enum"]
+            .as_array()
+            .expect("target type enum");
+        assert!(types.iter().any(|kind| kind == "text"));
+        assert!(types.iter().any(|kind| kind == "code"));
+        assert!(schema["properties"]["path"].is_object());
+        assert!(schema["properties"]["url"].is_object());
+        assert!(schema["description"].as_str().unwrap().contains(".diff"));
+    }
+
+    #[test]
+    fn unknown_target_error_lists_supported_types() {
+        let error = parse_targets(&serde_json::json!({
+            "targets": [{ "type": "diff", "path": "/tmp/change.diff" }]
+        }))
+        .unwrap_err();
+        assert!(error.contains("unknown target type 'diff'"));
+        assert!(error.contains("text"));
     }
 
     #[tokio::test]

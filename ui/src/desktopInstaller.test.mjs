@@ -7,6 +7,8 @@ const client = (id, state, overrides = {}) => ({
   state,
   config_path: '',
   version: null,
+  skill_state: 'installed',
+  restartable: false,
   message: null,
   ...overrides,
 });
@@ -21,6 +23,17 @@ test('offers install only for missing or outdated clients', () => {
       client('gemini', 'invalid'),
     ]),
     ['claude_code', 'codex'],
+  );
+});
+
+test('treats a missing Claude Desktop skill as the combined install action', () => {
+  assert.deepEqual(
+    actionableClients([
+      client('claude_desktop', 'missing', { skill_state: 'missing' }),
+      client('claude_desktop', 'installed', { skill_state: 'pending' }),
+      client('claude_desktop', 'installed', { skill_state: 'installed' }),
+    ]),
+    ['claude_desktop'],
   );
 });
 

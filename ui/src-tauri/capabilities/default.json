@@ -8,6 +8,8 @@
     "allow-installer-status",
     "allow-install-clients",
     "allow-remove-clients",
+    "allow-open-claude-skills",
+    "allow-restart-client",
     "allow-quit-app"
   ]
 }

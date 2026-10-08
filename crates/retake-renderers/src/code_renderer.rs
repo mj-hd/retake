@@ -134,7 +134,14 @@ impl Renderer for CodeRenderer {
             .as_deref()
             .ok_or_else(|| RenderError::Capture("code path required".into()))?;
         if CodeLanguage::for_path(path).is_none() {
-            return Err(RenderError::Unsupported);
+            let extension = Path::new(path)
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(|value| format!(".{value}"))
+                .unwrap_or_else(|| "<none>".into());
+            return Err(RenderError::Capture(format!(
+                "unsupported code file extension {extension}; code supports .rs, .ts, .tsx, .js, .jsx, .mjs, .mts, and .cts. Use target type \"text\" for .diff, .patch, and other UTF-8 text files"
+            )));
         }
         let worker = self
             .worker
@@ -1156,6 +1163,23 @@ mod tests {
                 "helper.rs",
             ),
         ]
+    }
+
+    #[tokio::test]
+    async fn unsupported_code_extension_suggests_text_target() {
+        let renderer = CodeRenderer::new(None);
+        let target = Target {
+            kind: TargetKind::Code,
+            path: Some("/tmp/change.diff".into()),
+            url: None,
+            label: None,
+            viewport: None,
+            metadata: None,
+        };
+
+        let error = renderer.capture(&target).await.unwrap_err().to_string();
+        assert!(error.contains("unsupported code file extension .diff"));
+        assert!(error.contains("target type \"text\""));
     }
 
     #[test]

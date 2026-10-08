@@ -2,9 +2,12 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use toml_edit::{Array, DocumentMut, Item, Table, Value as TomlValue};
 
 const SERVER_NAME: &str = "retake";
+const CLAUDE_BUNDLE_ID: &str = "com.anthropic.claudefordesktop";
+const CLAUDE_SKILLS_URL: &str = "claude://claude.ai/customize/skills/yours";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum ClientId {
@@ -55,6 +58,16 @@ pub enum InstallState {
     Invalid,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillInstallState {
+    Unavailable,
+    Missing,
+    Pending,
+    Installed,
+    Outdated,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ClientStatus {
     pub id: ClientId,
@@ -63,6 +76,8 @@ pub struct ClientStatus {
     /// Version of the Retake build the client is registered against, when it
     /// can be read from the configured command. `None` for source installs.
     pub version: Option<String>,
+    pub skill_state: SkillInstallState,
+    pub restartable: bool,
     pub message: Option<String>,
 }
 
@@ -127,7 +142,19 @@ impl Installer {
             return self.report(id, InstallState::Unavailable, None);
         }
         match self.registration_state(id) {
-            Ok(state) if state == InstallState::Installed && !self.skill_current(id) => {
+            Ok(InstallState::Installed)
+                if id == ClientId::ClaudeDesktop
+                    && self.skill_state(id) == SkillInstallState::Missing =>
+            {
+                self.report(id, InstallState::Missing, None)
+            }
+            Ok(state)
+                if state == InstallState::Installed
+                    && (id != ClientId::ClaudeDesktop
+                        && self.skill_state(id) != SkillInstallState::Installed
+                        || id == ClientId::ClaudeDesktop
+                            && self.skill_state(id) == SkillInstallState::Outdated) =>
+            {
                 self.report(id, InstallState::Outdated, None)
             }
             Ok(state) => self.report(id, state, None),
@@ -183,6 +210,12 @@ impl Installer {
             } else {
                 None
             },
+            skill_state: if self.available(id) {
+                self.skill_state(id)
+            } else {
+                SkillInstallState::Unavailable
+            },
+            restartable: self.app_path(id).is_some(),
             message,
         }
     }
@@ -255,8 +288,17 @@ impl Installer {
         match id {
             ClientId::ClaudeDesktop => Some("Claude.app"),
             ClientId::Codex => Some("Codex.app"),
+            ClientId::OpenCode => Some("OpenCode.app"),
             _ => None,
         }
+    }
+
+    fn app_path(&self, id: ClientId) -> Option<PathBuf> {
+        let name = self.app_name(id)?;
+        self.app_directories
+            .iter()
+            .map(|directory| directory.join(name))
+            .find(|path| path.is_dir())
     }
 
     fn binary_names(&self, id: ClientId) -> &'static [&'static str] {
@@ -398,14 +440,24 @@ impl Installer {
         Some(self.home.join(relative))
     }
 
-    fn skill_current(&self, id: ClientId) -> bool {
+    fn skill_state(&self, id: ClientId) -> SkillInstallState {
         let Some(source) = &self.skill_source else {
-            return true;
+            return SkillInstallState::Unavailable;
         };
+        if id == ClientId::ClaudeDesktop {
+            return self.claude_desktop_skill_state(source);
+        }
         let Some(destination) = self.skill_destination(id) else {
-            return true;
+            return SkillInstallState::Unavailable;
         };
-        fs::read(source).ok() == fs::read(&destination).ok() && is_retake_skill(&destination)
+        if !destination.is_file() || !is_retake_skill(&destination) {
+            return SkillInstallState::Missing;
+        }
+        if fs::read(source).ok() == fs::read(destination).ok() {
+            SkillInstallState::Installed
+        } else {
+            SkillInstallState::Outdated
+        }
     }
 
     fn install_skill(&self, id: ClientId) -> Result<(), String> {
@@ -414,6 +466,13 @@ impl Installer {
             return Ok(());
         };
         if let Some(parent) = destination.parent() {
+            if fs::symlink_metadata(parent).is_ok_and(|metadata| metadata.file_type().is_symlink())
+            {
+                if destination.is_file() && !is_retake_skill(&destination) {
+                    return Err("refusing to replace a non-Retake skill link".into());
+                }
+                fs::remove_file(parent).map_err(|error| error.to_string())?;
+            }
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
         fs::copy(source, &destination).map_err(|error| error.to_string())?;
@@ -424,6 +483,15 @@ impl Installer {
         let Some(destination) = self.skill_destination(id) else {
             return Ok(());
         };
+        if let Some(directory) = destination.parent()
+            && fs::symlink_metadata(directory)
+                .is_ok_and(|metadata| metadata.file_type().is_symlink())
+        {
+            if destination.is_file() && is_retake_skill(&destination) {
+                fs::remove_file(directory).map_err(|error| error.to_string())?;
+            }
+            return Ok(());
+        }
         if destination.is_file() && is_retake_skill(&destination) {
             fs::remove_file(&destination).map_err(|error| error.to_string())?;
         }
@@ -435,6 +503,169 @@ impl Installer {
 
     fn executable_string(&self) -> String {
         self.executable.to_string_lossy().to_string()
+    }
+
+    fn create_claude_skill_archive(&self) -> Result<PathBuf, String> {
+        let source = self
+            .skill_source
+            .as_deref()
+            .ok_or("bundled Retake skill is unavailable")?;
+        if !is_retake_skill(source) {
+            return Err("bundled Retake skill is invalid".into());
+        }
+        let skill_directory = source
+            .parent()
+            .ok_or("bundled Retake skill directory is unavailable")?;
+        let downloads = self.home.join("Downloads");
+        fs::create_dir_all(&downloads).map_err(|error| error.to_string())?;
+        let archive = downloads.join("retake.skill");
+        if archive.exists() {
+            fs::remove_file(&archive).map_err(|error| error.to_string())?;
+        }
+
+        let output = Command::new("/usr/bin/ditto")
+            .args(["-c", "-k", "--norsrc", "--noextattr", "--keepParent"])
+            .arg(skill_directory)
+            .arg(&archive)
+            .output()
+            .map_err(|error| format!("could not create the skill archive: {error}"))?;
+        if !output.status.success() {
+            let detail = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("could not create the skill archive: {detail}"));
+        }
+        Ok(archive)
+    }
+
+    fn claude_skill_request_path(&self) -> PathBuf {
+        self.home
+            .join("Library/Application Support/Retake/claude-skill-requested.md")
+    }
+
+    fn record_claude_skill_request(&self) -> Result<(), String> {
+        let source = self
+            .skill_source
+            .as_deref()
+            .ok_or("bundled Retake skill is unavailable")?;
+        let destination = self.claude_skill_request_path();
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        fs::copy(source, destination).map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    fn request_claude_skill_install(&self) -> Result<(), String> {
+        let archive = self.create_claude_skill_archive()?;
+        let output = Command::new("/usr/bin/open")
+            .args(["-b", CLAUDE_BUNDLE_ID])
+            .arg(&archive)
+            .output()
+            .map_err(|error| format!("could not open the Skill in Claude: {error}"))?;
+        if !output.status.success() {
+            let detail = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("could not open the Skill in Claude: {detail}"));
+        }
+        self.record_claude_skill_request()
+    }
+
+    fn restart_app(&self, id: ClientId) -> Result<(), String> {
+        let app = self
+            .app_path(id)
+            .ok_or("this client is not available as a desktop application")?;
+        let executable = bundle_executable(&app.join("Contents/Info.plist"))
+            .ok_or("the desktop application executable is unavailable")?;
+
+        // TERM lets Electron apps shut down normally without requiring macOS
+        // Automation permission. `killall` returning 1 only means the app was
+        // not running, in which case opening it is still the desired result.
+        let output = Command::new("/usr/bin/killall")
+            .arg(&executable)
+            .output()
+            .map_err(|error| format!("could not stop {executable}: {error}"))?;
+        if !output.status.success() && output.status.code() != Some(1) {
+            let detail = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("could not stop {executable}: {detail}"));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        let output = Command::new("/usr/bin/open")
+            .arg("-a")
+            .arg(&app)
+            .output()
+            .map_err(|error| format!("could not reopen {executable}: {error}"))?;
+        if !output.status.success() {
+            let detail = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("could not reopen {executable}: {detail}"));
+        }
+        Ok(())
+    }
+
+    fn claude_desktop_skill_state(&self, source: &Path) -> SkillInstallState {
+        let requested = self.claude_skill_request_path();
+        let request_is_current = requested.is_file()
+            && is_retake_skill(&requested)
+            && fs::read(source).ok() == fs::read(&requested).ok();
+        let request_modified = fs::metadata(&requested)
+            .and_then(|value| value.modified())
+            .ok();
+
+        let Some((cache_modified, skill)) = self.latest_claude_skill_cache() else {
+            return if request_is_current {
+                SkillInstallState::Pending
+            } else {
+                SkillInstallState::Missing
+            };
+        };
+        if skill.as_deref().is_some_and(|skill| {
+            fs::read(source).ok() == fs::read(skill).ok() && is_retake_skill(skill)
+        }) {
+            SkillInstallState::Installed
+        } else if request_is_current
+            && request_modified.is_some_and(|requested| requested >= cache_modified)
+        {
+            SkillInstallState::Pending
+        } else if skill.is_some() {
+            SkillInstallState::Outdated
+        } else {
+            SkillInstallState::Missing
+        }
+    }
+
+    /// Claude materializes account Skills into the latest local skills-plugin
+    /// session. This is read-only, best-effort detection; account installation
+    /// still happens exclusively through Claude's own `.skill` installer.
+    fn latest_claude_skill_cache(&self) -> Option<(std::time::SystemTime, Option<PathBuf>)> {
+        let base = self
+            .home
+            .join("Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin");
+        let mut manifests = Vec::new();
+        for first in fs::read_dir(base).ok()?.flatten() {
+            for second in fs::read_dir(first.path()).into_iter().flatten().flatten() {
+                let root = second.path();
+                let manifest = root.join("manifest.json");
+                let modified = fs::metadata(&manifest)
+                    .and_then(|value| value.modified())
+                    .ok();
+                if let Some(modified) = modified {
+                    manifests.push((modified, root, manifest));
+                }
+            }
+        }
+        manifests.sort_by_key(|(modified, _, _)| *modified);
+        let (modified, root, manifest) = manifests.pop()?;
+        let value = read_json(&manifest).ok()?;
+        let enabled = value
+            .get("skills")
+            .and_then(Value::as_array)
+            .is_some_and(|skills| {
+                skills.iter().any(|skill| {
+                    skill.get("name").and_then(Value::as_str) == Some("retake")
+                        && skill.get("enabled").and_then(Value::as_bool) != Some(false)
+                })
+            });
+        Some((
+            modified,
+            enabled.then(|| root.join("skills/retake/SKILL.md")),
+        ))
     }
 }
 
@@ -680,6 +911,18 @@ fn bundle_version(info_plist: &Path) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
+fn bundle_executable(info_plist: &Path) -> Option<String> {
+    let text = fs::read_to_string(info_plist).ok()?;
+    let after_key = text.split("<key>CFBundleExecutable</key>").nth(1)?;
+    let value = after_key
+        .split("<string>")
+        .nth(1)?
+        .split("</string>")
+        .next()?;
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
 fn is_retake_skill(path: &Path) -> bool {
     fs::read_to_string(path).ok().is_some_and(|text| {
         text.lines()
@@ -703,13 +946,50 @@ pub fn installer_status() -> Result<Vec<ClientStatus>, String> {
 #[tauri::command]
 pub fn install_clients(ids: Vec<String>) -> Result<Vec<ClientStatus>, String> {
     let installer = Installer::for_current_user()?;
-    Ok(installer.install(&parse_client_ids(&ids)?))
+    let ids = parse_client_ids(&ids)?;
+    let mut statuses = installer.install(&ids);
+    let desktop_ready = ids.contains(&ClientId::ClaudeDesktop)
+        && installer.registration_state(ClientId::ClaudeDesktop) == Ok(InstallState::Installed);
+    if desktop_ready
+        && ids.contains(&ClientId::ClaudeDesktop)
+        && installer.skill_state(ClientId::ClaudeDesktop) != SkillInstallState::Installed
+    {
+        let error = installer.request_claude_skill_install().err();
+        statuses = ids.iter().map(|id| installer.status_for(*id)).collect();
+        if let Some(error) = error
+            && let Some(status) = statuses
+                .iter_mut()
+                .find(|status| status.id == ClientId::ClaudeDesktop)
+        {
+            status.message = Some(error);
+        }
+    }
+    Ok(statuses)
 }
 
 #[tauri::command]
 pub fn remove_clients(ids: Vec<String>) -> Result<Vec<ClientStatus>, String> {
     let installer = Installer::for_current_user()?;
     Ok(installer.remove(&parse_client_ids(&ids)?))
+}
+
+#[tauri::command]
+pub fn open_claude_skills() -> Result<(), String> {
+    let output = Command::new("/usr/bin/open")
+        .arg(CLAUDE_SKILLS_URL)
+        .output()
+        .map_err(|error| format!("could not open Claude Skills: {error}"))?;
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("could not open Claude Skills: {detail}"));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn restart_client(id: String) -> Result<(), String> {
+    let installer = Installer::for_current_user()?;
+    installer.restart_app(ClientId::parse(&id)?)
 }
 
 #[cfg(test)]
@@ -722,7 +1002,7 @@ mod tests {
         let executable = home.path().join("Retake.app/Contents/MacOS/retake-desktop");
         fs::create_dir_all(executable.parent().unwrap()).unwrap();
         fs::write(&executable, "").unwrap();
-        let skill = home.path().join("skill/SKILL.md");
+        let skill = home.path().join("bundle/retake/SKILL.md");
         fs::create_dir_all(skill.parent().unwrap()).unwrap();
         fs::write(&skill, "---\nname: retake\n---\n# retake\n").unwrap();
         let installer = Installer::isolated(home.path(), &executable, Some(skill));
@@ -824,7 +1104,9 @@ mod tests {
         assert!(
             installed
                 .iter()
-                .all(|status| status.state == InstallState::Installed)
+                .all(|status| status.state == InstallState::Installed
+                    || status.id == ClientId::ClaudeDesktop
+                        && status.state == InstallState::Missing)
         );
         let again = installer.install(&ClientId::all());
         assert_eq!(installed, again);
@@ -969,5 +1251,136 @@ trust_level = \"trusted\"
         assert!(is_retake_skill(&skill));
         installer.remove(&[ClientId::ClaudeCode]);
         assert!(!skill.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unlinks_a_skill_directory_without_deleting_its_target() {
+        use std::os::unix::fs::symlink;
+
+        let (home, installer) = fixture();
+        mark_available(home.path());
+        let source = installer.skill_source.as_ref().unwrap();
+        let linked = home.path().join(".claude/skills/retake");
+        fs::create_dir_all(linked.parent().unwrap()).unwrap();
+        symlink(source.parent().unwrap(), &linked).unwrap();
+
+        installer.remove(&[ClientId::ClaudeCode]);
+        assert!(source.is_file());
+        assert!(!linked.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replaces_a_skill_directory_link_with_an_independent_copy() {
+        use std::os::unix::fs::symlink;
+
+        let (home, installer) = fixture();
+        mark_available(home.path());
+        let source = installer.skill_source.as_ref().unwrap();
+        let linked = home.path().join(".claude/skills/retake");
+        fs::create_dir_all(linked.parent().unwrap()).unwrap();
+        symlink(source.parent().unwrap(), &linked).unwrap();
+
+        installer.install(&[ClientId::ClaudeCode]);
+        assert!(
+            !fs::symlink_metadata(&linked)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(
+            fs::read(source).unwrap(),
+            fs::read(linked.join("SKILL.md")).unwrap()
+        );
+    }
+
+    #[test]
+    fn tracks_claude_desktop_skill_installation_state() {
+        let (home, installer) = fixture();
+        mark_available(home.path());
+        assert_eq!(
+            installer.skill_state(ClientId::ClaudeDesktop),
+            SkillInstallState::Missing
+        );
+        installer
+            .install_stdio(ClientId::ClaudeDesktop, false)
+            .unwrap();
+        assert_eq!(
+            installer.status_for(ClientId::ClaudeDesktop).state,
+            InstallState::Missing
+        );
+
+        installer.record_claude_skill_request().unwrap();
+        assert_eq!(
+            installer.skill_state(ClientId::ClaudeDesktop),
+            SkillInstallState::Pending
+        );
+        assert_eq!(
+            installer.status_for(ClientId::ClaudeDesktop).state,
+            InstallState::Installed
+        );
+
+        let session = home.path().join(
+            "Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/account/session",
+        );
+        let cached = session.join("skills/retake/SKILL.md");
+        fs::create_dir_all(cached.parent().unwrap()).unwrap();
+        fs::copy(installer.skill_source.as_ref().unwrap(), &cached).unwrap();
+        fs::write(
+            session.join("manifest.json"),
+            r#"{"skills":[{"name":"retake","enabled":true}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            installer.skill_state(ClientId::ClaudeDesktop),
+            SkillInstallState::Installed
+        );
+
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        fs::write(session.join("manifest.json"), r#"{"skills":[]}"#).unwrap();
+        assert_eq!(
+            installer.skill_state(ClientId::ClaudeDesktop),
+            SkillInstallState::Missing
+        );
+
+        fs::write(
+            session.join("manifest.json"),
+            r#"{"skills":[{"name":"retake","enabled":true}]}"#,
+        )
+        .unwrap();
+        fs::remove_file(installer.claude_skill_request_path()).unwrap();
+        fs::write(&cached, "---\nname: retake\n---\n# old\n").unwrap();
+        assert_eq!(
+            installer.skill_state(ClientId::ClaudeDesktop),
+            SkillInstallState::Outdated
+        );
+
+        fs::write(session.join("manifest.json"), r#"{"skills":[]}"#).unwrap();
+        assert_eq!(
+            installer.skill_state(ClientId::ClaudeDesktop),
+            SkillInstallState::Missing
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn creates_a_claude_skill_package_in_downloads() {
+        let (home, installer) = fixture();
+        let archive = installer.create_claude_skill_archive().unwrap();
+        assert_eq!(archive, home.path().join("Downloads/retake.skill"));
+
+        let listing = Command::new("/usr/bin/unzip")
+            .args(["-Z1"])
+            .arg(&archive)
+            .output()
+            .unwrap();
+        assert!(listing.status.success());
+        let files: Vec<_> = String::from_utf8_lossy(&listing.stdout)
+            .lines()
+            .map(str::to_owned)
+            .collect();
+        assert!(files.iter().any(|path| path == "retake/SKILL.md"));
+        assert!(!files.iter().any(|path| path.contains("._")));
     }
 }

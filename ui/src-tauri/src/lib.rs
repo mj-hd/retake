@@ -99,6 +99,8 @@ pub fn run() {
             installer::installer_status,
             installer::install_clients,
             installer::remove_clients,
+            installer::open_claude_skills,
+            installer::restart_client,
             quit_app
         ])
         .setup(move |app| {

@@ -26,8 +26,6 @@ See [Review targets and renderers](docs/RENDERERS.md) for supported formats and 
 3. Launch Retake from Applications and click **Install** for the agents you use, or **Install all**
 4. Restart those agents after installation
 
-The desktop app bundles the Retake runtime, registers its MCP server, and installs the Skill for supported CLI agents, so the separate CLI setup below is not required. Be sure to copy the app to Applications before registering it; launching and registering it directly from the mounted DMG leaves agent settings pointing at the temporary mounted volume.
-
 ### Option 2: CLI (macOS and Linux)
 
 Node.js 20 or later, npm, and curl are required for the CLI installation.

@@ -12,9 +12,9 @@ This document describes the target formats accepted by `open_review`, their capt
 | `html` | Local HTML file | Fixed viewport PNG plus a capture-time DOM map |
 | `markdown` | Local Markdown file | Rendered, scrollable full-document PNG with source-line mapping |
 | `image` | Local PNG, JPEG, or WebP | Original-resolution image |
-| `text` | Local text file | Rendered text with byte-offset mapping |
+| `text` | Local UTF-8 text, including `.diff` and `.patch` | Rendered text with byte-offset mapping |
 | `adb` | Android device serial | Screenshot plus capture-time UIAutomator nodes |
-| `code` | Rust, TypeScript, or JavaScript source | Interactive infinite field with source and symbol mapping |
+| `code` | `.rs`, `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.mts`, `.cts` | Interactive infinite field with source and symbol mapping |
 | `pdf` | Local PDF | Vertical page document with page/text mapping |
 | `pencil` | Pencil MCP PNG export and node metadata | Exported frame with Pencil node mapping |
 | `video` | Local video file | Scrollable sampled storyboard with timecodes |
@@ -59,6 +59,8 @@ Use `type: "markdown"` for a rendered document:
 ```
 
 Images retain their original resolution. Text is rendered into a review image while preserving character/byte ranges for resolved comments.
+
+Use `text` for UTF-8 git diffs and patches (`.diff` and `.patch`). They are reviewed as plain text rather than as the symbol-aware `code` canvas.
 
 ## Android (adb)
 

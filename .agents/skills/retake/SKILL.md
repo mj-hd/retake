@@ -8,6 +8,26 @@ compatibility: Requires an MCP client connected to the retake server and access 
 
 Use the tools exposed by the `retake` MCP server whenever the user asks to review, annotate, compare, or revise a supported artifact in the retake review window. MCP clients may display a tool as `retake.open_review`, `mcp__retake__open_review`, or simply `open_review`; use the matching MCP tool rather than trying to run these names in a shell.
 
+## Target selection
+
+Choose the target from this list before calling `open_review`. Do not search the user's home directory for Retake documentation, and do not substitute an unrelated supported file when the requested artifact has an unsupported format.
+
+| Type | Accepted input |
+| --- | --- |
+| `image` | Local PNG, JPEG, or WebP |
+| `text` | Local UTF-8 plain text, including `.txt`, `.diff`, `.patch`, logs, and config files |
+| `markdown` | Local `.md` or `.markdown` rendered as Markdown; use `text` to review its raw source |
+| `web` | HTTP(S) URL in `url` |
+| `html` | Local HTML |
+| `adb` | Connected Android device serial in `path` |
+| `code` | Local `.rs`, `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.mts`, or `.cts` source only |
+| `pdf` | Local PDF |
+| `pencil` | Pencil PNG export plus node metadata, or its JSON manifest |
+| `video` | Local video readable by ffmpeg |
+| `macos_window` | Running macOS app name or absolute `.app` path |
+
+For a git diff, write the diff to a `.diff` or `.patch` file and pass it as `type: "text"`; do not pass it as `code` or inspect recent commits for another file to review. Resolve local paths to absolute paths. If the requested artifact cannot use any type above, explain the limitation instead of searching broadly for an alternative.
+
 ## Mandatory workflow
 
 1. Resolve every local target to an absolute path. Keep the complete target list and its order for later revisions.
