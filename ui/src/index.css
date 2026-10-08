@@ -185,6 +185,151 @@
 body {
   margin: 0;
 }
+.desktop-home {
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 32px 28px;
+  background: var(--surface-app);
+}
+.desktop-setup {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+  width: min(680px, 100%);
+}
+.desktop-intro {
+  text-align: center;
+}
+.desktop-intro h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+}
+.desktop-intro p {
+  max-width: 100%;
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.desktop-clients {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-control);
+}
+.desktop-client {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 54px;
+  border-bottom: 1px solid var(--border-control);
+  transition: background 0.2s ease;
+}
+.desktop-client:hover {
+  background: var(--surface-control-hover);
+}
+.desktop-client-label {
+  display: block;
+  min-width: 0;
+}
+.desktop-client strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  animation: desktop-fade-in 0.24s ease both;
+}
+.desktop-client small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  animation: desktop-fade-in 0.24s ease both;
+}
+.desktop-client em {
+  color: var(--text-muted);
+  font-style: normal;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.desktop-client em:empty {
+  display: none;
+}
+.desktop-client[data-state='invalid'] em {
+  color: var(--color-danger);
+}
+.desktop-client em.desktop-restart-note {
+  color: var(--color-danger);
+  font-weight: 600;
+  animation: desktop-fade-in 0.24s ease both;
+}
+.desktop-client > .button {
+  grid-column: 3;
+  justify-self: end;
+}
+.desktop-action-label {
+  display: inline-block;
+  animation: desktop-fade-in 0.24s ease both;
+}
+@keyframes desktop-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop-client strong,
+  .desktop-client small,
+  .desktop-restart-note,
+  .desktop-action-label {
+    animation: none;
+  }
+  .desktop-client {
+    transition: none;
+  }
+}
+.desktop-setup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+/* Always occupies one line so notices and errors never shift the layout. */
+.desktop-setup-status {
+  display: flex;
+  align-items: center;
+  min-height: 18px;
+  margin-top: -10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.desktop-home-brand {
+  display: flex;
+  align-items: center;
+  width: 196px;
+  color: var(--text-primary);
+}
+.desktop-home-brand .brand-mark {
+  width: 30px;
+  height: 30px;
+  margin-right: 12px;
+}
+.desktop-home-brand .brand-wordmark {
+  width: 146px;
+  height: auto;
+  fill: currentColor;
+}
 button,
 textarea {
   font: inherit;
@@ -1811,7 +1956,7 @@ button:disabled {
     gap: 10px;
   }
   .status-pill,
-  .button-quiet {
+  .topbar .button-quiet {
     display: none;
   }
   .workspace {

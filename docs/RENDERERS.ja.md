@@ -18,6 +18,7 @@
 | `pdf` | ローカルPDF | ページとテキストを対応付けた縦長ドキュメント |
 | `pencil` | Pencil MCPのPNG exportとnode metadata | nodeマッピング付きのexport済みframe |
 | `video` | ローカル動画 | timecode付きのスクロール可能なstoryboard |
+| `macos_window` | 起動中のmacOSアプリ名または`.app`パス | タイトルバーを含むウィンドウのPNG |
 
 ## WebとローカルHTML
 
@@ -64,6 +65,18 @@ Playwright Chromiumを指定ビューポート（標準は1280×800）で実行�
 - `path`には接続中の端末を識別するserialを指定します。serialは`adb devices -l`で確認できます
 - `screencap`で画面を取得し、キャプチャ時のUIAutomator treeから要素を対応付けます
 - `adb`が`PATH`にない場合は`RETAKE_ADB`を指定します
+
+## macOSウィンドウ
+
+```json
+{ "targets": [{ "type": "macos_window", "path": "Retake" }] }
+```
+
+- `path`には起動中のアプリ名、または`/Applications/Retake.app`のような`.app`パスを指定します
+- 同じアプリに複数のウィンドウがある場合は、`"metadata": { "window_title": "Retake" }`でタイトルを絞り込めます。`window_id`を直接指定することもできます
+- 最前面に近い一致ウィンドウを、タイトルバーを含みshadowを除いた固定PNGとして保存します
+- 初回利用時、MCPを起動したアプリにmacOSの「画面収録とシステムオーディオ録音」権限が必要です
+- ウィンドウIDは一時的なため、コメントはキャプチャ画像内の座標へ解決します。更新時はアプリ名とタイトルから再取得します
 
 ## ソースコード
 

@@ -11,6 +11,7 @@ Use the tools exposed by the `retake` MCP server whenever the user asks to revie
 ## Mandatory workflow
 
 1. Resolve every local target to an absolute path. Keep the complete target list and its order for later revisions.
+   - For a running macOS application window, use `type: "macos_window"` with its application name or absolute `.app` path in `path`. Add `metadata.window_title` when the app has multiple windows.
 2. Call the retake `open_review` tool once. Unless the user requested otherwise, let it open the owned browser window.
 3. Immediately tell the user that the review is ready and include the returned `review_url`. If `browser_opened` is true, do not open the URL a second time.
 4. **In the same agent turn, call the retake `wait_review` tool with the returned review ID and `timeout_ms: 600000`. Never finish the turn after only calling `open_review`.**

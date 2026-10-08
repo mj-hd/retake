@@ -11,7 +11,7 @@ https://github.com/user-attachments/assets/ed6a4a67-906e-4bab-bbe7-f69023da4999
 - Attach comments to selected regions or points
 - Follow an agent's revision progress in real time
 - Compare an earlier revision with the latest side by side, with a slider, or as a pixel diff
-- Review web pages, HTML, Markdown, images, text, Android screens, code, PDFs, Pencil exports, and video
+- Review web pages, HTML, Markdown, images, text, Android and macOS windows, code, PDFs, Pencil exports, and video
 
 See [Review targets and renderers](docs/RENDERERS.md) for supported formats and their required tools
 
@@ -168,6 +168,27 @@ ln -sfn "$RETAKE_ROOT/.agents/skills/retake" "$HOME/.gemini/skills/retake"
 ln -sfn "$RETAKE_ROOT/.agents/skills/retake" "$HOME/.config/opencode/skills/retake"
 ```
 
+### Tauri desktop preview (macOS)
+
+The desktop proof of concept in `ui/src-tauri` runs the existing React UI in a Tauri window
+
+```bash
+cd ui
+npm ci
+npm run desktop:build
+open src-tauri/target/release/bundle/macos/Retake.app
+```
+
+`desktop:build` bundles Playwright's installed headless Chromium as a private app resource. If it is missing, first run `npx playwright install chromium-headless-shell` in `workers/web-capture`
+
+To use the built Retake.app instead of Chrome from a development MCP server, point it at the executable inside the app bundle
+
+```bash
+export RETAKE_DESKTOP_BIN="$RETAKE_ROOT/ui/src-tauri/target/release/bundle/macos/Retake.app/Contents/MacOS/retake-desktop"
+```
+
+The desktop app receives the review URL over stdin rather than exposing it in process arguments. Without this environment variable, retake falls back to the existing Playwright review window
+
 ### Validation
 
 ```bash
@@ -175,12 +196,14 @@ cargo fmt -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cd ui && npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cd ../workers/web-capture && npm test
 ```
 
 ### Releasing
 
-Pushing a tag beginning with `v` makes GitHub Actions build archives and SHA-256 checksums for each supported platform and publish a GitHub Release
+Pushing a tag beginning with `v` makes GitHub Actions publish CLI archives and SHA-256 checksums together with Developer ID-signed and Apple-notarized macOS DMGs for Apple Silicon and Intel
 
 ```bash
 git tag v0.1.0

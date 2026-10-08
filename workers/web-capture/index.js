@@ -55,7 +55,10 @@ async function main() {
   const outDir = output_dir;
   await fs.mkdir(outDir, { recursive: true });
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    ...(process.env.RETAKE_CHROMIUM_BIN ? { executablePath: process.env.RETAKE_CHROMIUM_BIN } : {}),
+  });
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
     // PNG is 2x; viewport and DOM rectangles remain CSS pixels.

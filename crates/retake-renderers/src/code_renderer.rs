@@ -1,8 +1,8 @@
 use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 use image::{ImageFormat, Rgb, RgbImage};
 use retake_core::{
-    RenderError, Renderer, ResolvedReference, Selection, SnapshotDraft, StoredSnapshot, Target,
-    TargetKind,
+    RenderError, Renderer, ResolvedReference, RuntimePaths, Selection, SnapshotDraft,
+    StoredSnapshot, Target, TargetKind,
 };
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -328,7 +328,10 @@ impl CodeRenderer {
     ) -> Result<DocData, RenderError> {
         let script = Path::new(worker).with_file_name("code-map.js");
         let language = CodeLanguage::for_path(path).ok_or(RenderError::Unsupported)?;
-        let mut child = Command::new("node")
+        let runtime = RuntimePaths::discover();
+        let mut command = Command::new(runtime.node_executable());
+        runtime.configure_worker_command(&mut command);
+        let mut child = command
             .arg(&script)
             .arg(language.worker_name())
             .arg(path)

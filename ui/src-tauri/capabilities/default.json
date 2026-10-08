@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "enables the default permissions",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "allow-installer-status",
+    "allow-install-clients",
+    "allow-remove-clients",
+    "allow-quit-app"
+  ]
+}

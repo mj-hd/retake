@@ -28,7 +28,10 @@ async function main() {
         if (parsed.protocol !== 'http:' || parsed.hostname !== '127.0.0.1' || !/^\/review\/[0-9a-f-]+$/.test(parsed.pathname)) {
           throw new Error('expected a local retake review URL');
         }
-        browser = await chromium.launch({ headless: process.env.RETAKE_BROWSER_HEADLESS === '1' });
+        browser = await chromium.launch({
+          headless: process.env.RETAKE_BROWSER_HEADLESS === '1',
+          ...(process.env.RETAKE_CHROMIUM_BIN ? { executablePath: process.env.RETAKE_CHROMIUM_BIN } : {}),
+        });
         // browser.close() also emits "disconnected". Exiting from that event
         // interrupts Playwright's own shutdown and can strand the Chromium
         // leader after replacing or cancelling a review window.

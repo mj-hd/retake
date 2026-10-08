@@ -1,0 +1,19 @@
+[[permission]]
+identifier = "allow-installer-status"
+description = "Read which MCP clients have Retake installed."
+commands.allow = ["installer_status"]
+
+[[permission]]
+identifier = "allow-install-clients"
+description = "Install Retake into selected MCP clients."
+commands.allow = ["install_clients"]
+
+[[permission]]
+identifier = "allow-remove-clients"
+description = "Remove Retake from selected MCP clients."
+commands.allow = ["remove_clients"]
+
+[[permission]]
+identifier = "allow-quit-app"
+description = "Quit the Retake desktop application."
+commands.allow = ["quit_app"]

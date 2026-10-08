@@ -22,3 +22,7 @@ base64.workspace = true
 sha2.workspace = true
 hex.workspace = true
 ab_glyph = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+core-graphics = "0.25"

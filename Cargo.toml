@@ -5,6 +5,7 @@ members = [
     "crates/retake-renderers",
     "crates/retake-server",
 ]
+exclude = ["ui/src-tauri"]
 resolver = "2"
 
 [workspace.package]

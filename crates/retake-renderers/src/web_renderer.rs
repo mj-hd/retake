@@ -1,6 +1,6 @@
 use retake_core::{
-    RenderError, Renderer, ResolvedReference, Selection, SnapshotDraft, StoredSnapshot, Target,
-    TargetKind,
+    RenderError, Renderer, ResolvedReference, RuntimePaths, Selection, SnapshotDraft,
+    StoredSnapshot, Target, TargetKind,
 };
 use std::fs;
 use std::process::Stdio;
@@ -68,7 +68,10 @@ impl Renderer for WebRenderer {
         fs::write(&req_path, serde_json::to_string(&req).unwrap())?;
 
         // spawn node worker (async)
-        let mut child = Command::new("node")
+        let runtime = RuntimePaths::discover();
+        let mut command = Command::new(runtime.node_executable());
+        runtime.configure_worker_command(&mut command);
+        let mut child = command
             .arg(&self.worker_path)
             .arg(req_path.to_string_lossy().to_string())
             .stdout(Stdio::piped())

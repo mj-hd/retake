@@ -1,6 +1,6 @@
 use retake_core::{
-    RenderError, Renderer, ResolvedReference, Selection, SnapshotDraft, StoredSnapshot, Target,
-    TargetKind,
+    RenderError, Renderer, ResolvedReference, RuntimePaths, Selection, SnapshotDraft,
+    StoredSnapshot, Target, TargetKind,
 };
 use std::path::Path;
 use tempfile::TempDir;
@@ -46,7 +46,9 @@ impl Renderer for PdfRenderer {
             return Err(RenderError::Capture("PDF exceeds 30 MiB".into()));
         }
         let tmp = TempDir::new()?;
-        let mut command = Command::new("node");
+        let runtime = RuntimePaths::discover();
+        let mut command = Command::new(runtime.node_executable());
+        runtime.configure_worker_command(&mut command);
         command
             .arg(script)
             .arg(path)
