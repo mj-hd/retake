@@ -1,5 +1,5 @@
 use crate::review_service::ReviewService;
-use retake_core::{Target, TargetKind, Viewport};
+use retake_core::{RuntimePaths, Target, TargetKind, Viewport};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -10,9 +10,9 @@ use tracing::info;
 pub async fn run_mcp() -> anyhow::Result<()> {
     configure_stdio()?;
     let store = Arc::new(retake_store::ReviewStore::new());
-    let worker = std::env::var("RETAKE_WEB_WORKER")
-        .ok()
-        .map(PathBuf::from)
+    let runtime = RuntimePaths::discover();
+    let worker = runtime
+        .web_worker()
         .or_else(|| find_runtime_path("workers/web-capture/index.js", Path::is_file))
         .map(|p| p.to_string_lossy().to_string());
     let service = Arc::new(ReviewService::new(store.clone(), worker));
@@ -21,6 +21,12 @@ pub async fn run_mcp() -> anyhow::Result<()> {
     let ui_dir = std::env::var("RETAKE_UI_DIR")
         .map(std::path::PathBuf::from)
         .ok()
+        .or_else(|| {
+            runtime
+                .root()
+                .map(|root| root.join("ui"))
+                .filter(|path| path.join("dist/index.html").is_file())
+        })
         .or_else(|| find_runtime_path("ui", |p| p.join("dist/index.html").is_file()))
         .unwrap_or_else(|| PathBuf::from("ui"));
     let http_server = crate::http_server::start_http(service.clone(), 0, ui_dir).await?;
@@ -98,7 +104,7 @@ async fn serve_mcp_requests(service: Arc<ReviewService>, base_url: &str) -> anyh
                 "tools": [
                     {
                         "name": "open_review",
-                        "description": "Open a review session for targets (image/text/markdown/web/html/adb/code/pdf/pencil/video). In the same assistant turn, show the returned URL and immediately call wait_review; never stop after open_review.",
+                        "description": "Open a review session for targets (image/text/markdown/web/html/adb/code/pdf/pencil/video/macos_window). In the same assistant turn, show the returned URL and immediately call wait_review; never stop after open_review.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -331,6 +337,7 @@ fn parse_targets(args: &Value) -> Result<Vec<Target>, String> {
             "pdf" => TargetKind::Pdf,
             "pencil" => TargetKind::Pencil,
             "video" => TargetKind::Video,
+            "macos_window" | "macos-window" => TargetKind::MacosWindow,
             _ => return Err("unknown type".into()),
         };
         let path = t
@@ -441,7 +448,8 @@ async fn handle_wait_review(service: Arc<ReviewService>, args: &Value) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::{find_runtime_path_from, forward_lines};
+    use super::{find_runtime_path_from, forward_lines, parse_targets};
+    use retake_core::TargetKind;
     use std::{fs, io::Cursor};
     use tokio::sync::mpsc;
 
@@ -459,6 +467,17 @@ mod tests {
 
         assert_eq!(result, Some(root.join("ui")));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn parses_macos_window_target_aliases() {
+        for kind in ["macos_window", "macos-window"] {
+            let targets = parse_targets(&serde_json::json!({
+                "targets": [{ "type": kind, "path": "Retake" }]
+            }))
+            .unwrap();
+            assert_eq!(targets[0].kind, TargetKind::MacosWindow);
+        }
     }
 
     #[tokio::test]

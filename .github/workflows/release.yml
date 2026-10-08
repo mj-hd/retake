@@ -1,16 +1,60 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build without publishing a GitHub Release
+        required: true
+        default: 0.1.0
   push:
     tags:
       - "v*"
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
-  contents: write
+  contents: read
+
+env:
+  RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
 
 jobs:
+  validate-version:
+    name: Validate release version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Match tag and package versions
+        env:
+          TAG: ${{ env.RELEASE_VERSION }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import tomllib
+
+          root = pathlib.Path.cwd()
+          versions = {
+              "workspace Cargo.toml": tomllib.loads((root / "Cargo.toml").read_text())["workspace"]["package"]["version"],
+              "Tauri config": json.loads((root / "ui/src-tauri/tauri.conf.json").read_text())["version"],
+              "desktop Cargo.toml": tomllib.loads((root / "ui/src-tauri/Cargo.toml").read_text())["package"]["version"],
+              "UI package.json": json.loads((root / "ui/package.json").read_text())["version"],
+          }
+          expected = os.environ["TAG"].removeprefix("v")
+          mismatches = {name: version for name, version in versions.items() if version != expected}
+          if mismatches:
+              raise SystemExit(f"tag version {expected} does not match: {mismatches}")
+          print(f"Release versions match: {expected}")
+          PY
+
   build:
     name: Build ${{ matrix.asset }}
+    needs: validate-version
     strategy:
       fail-fast: false
       matrix:
@@ -37,7 +81,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
@@ -76,10 +120,200 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  build-desktop:
+    name: Build signed desktop ${{ matrix.asset }}
+    needs: validate-version
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            asset: macos-x86_64
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            asset: macos-aarch64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            ui/package-lock.json
+            workers/web-capture/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            ui/src-tauri -> target
+
+      - name: Require signing secrets
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: |
+          : "${APPLE_CERTIFICATE:?Missing APPLE_CERTIFICATE}"
+          : "${APPLE_CERTIFICATE_PASSWORD:?Missing APPLE_CERTIFICATE_PASSWORD}"
+          : "${APPLE_SIGNING_IDENTITY:?Missing APPLE_SIGNING_IDENTITY}"
+          : "${APPLE_API_ISSUER:?Missing APPLE_API_ISSUER}"
+          : "${APPLE_API_KEY:?Missing APPLE_API_KEY}"
+          : "${APPLE_API_KEY_CONTENT:?Missing APPLE_API_KEY_CONTENT}"
+
+      - name: Install desktop dependencies
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: |
+          npm ci --prefix ui
+          npm ci --legacy-peer-deps --prefix workers/web-capture
+          cd workers/web-capture
+          npx playwright install chromium-headless-shell
+
+      - name: Build application and stage desktop runtime
+        working-directory: ui
+        run: |
+          npm run build
+          npm run desktop:stage-runtime
+          npx tauri build \
+            --no-bundle \
+            --target ${{ matrix.target }} \
+            --features custom-protocol \
+            --ci
+
+      - name: Import Developer ID certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          keychain_path="$RUNNER_TEMP/retake-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          echo "::add-mask::$keychain_password"
+          printf '%s' "$APPLE_CERTIFICATE" | openssl base64 -d -A -out "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+          security list-keychains -d user -s "$keychain_path" $(security list-keychains -d user | tr -d '"')
+          echo "SIGNING_CERTIFICATE_PATH=$certificate_path" >> "$GITHUB_ENV"
+          echo "SIGNING_KEYCHAIN_PATH=$keychain_path" >> "$GITHUB_ENV"
+
+      - name: Write notarization API key
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+          umask 077
+          printf '%s\n' "$APPLE_API_KEY_CONTENT" > "$key_path"
+          echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Sign bundled native runtimes
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: ui/scripts/sign-macos-resources.sh
+
+      - name: Bundle, sign, and notarize app
+        working-directory: ui
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: >-
+          npx tauri bundle
+          --bundles app,dmg
+          --target ${{ matrix.target }}
+          --features custom-protocol
+          --ci
+
+      - name: Notarize and staple DMG
+        env:
+          TARGET: ${{ matrix.target }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          dmg=(ui/src-tauri/target/"$TARGET"/release/bundle/dmg/*.dmg)
+          test "${#dmg[@]}" -eq 1
+          xcrun notarytool submit "${dmg[0]}" \
+            --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" \
+            --wait
+          xcrun stapler staple -v "${dmg[0]}"
+
+      - name: Verify signed release artifacts
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          app="ui/src-tauri/target/$TARGET/release/bundle/macos/Retake.app"
+          dmg=(ui/src-tauri/target/"$TARGET"/release/bundle/dmg/*.dmg)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dvv "$app" 2>&1 | grep -F "Authority=Developer ID Application:"
+          spctl --assess --type execute --verbose=2 "$app"
+          xcrun stapler validate "$app"
+          hdiutil verify "${dmg[0]}"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "${dmg[0]}"
+          xcrun stapler validate "${dmg[0]}"
+
+      - name: Package desktop release
+        env:
+          TARGET: ${{ matrix.target }}
+          ASSET: ${{ matrix.asset }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_VERSION#v}"
+          source=(ui/src-tauri/target/"$TARGET"/release/bundle/dmg/*.dmg)
+          mkdir -p dist
+          output="dist/Retake_${version}_${ASSET}.dmg"
+          cp "${source[0]}" "$output"
+          (cd dist && shasum -a 256 "$(basename "$output")" > "$(basename "$output").sha256")
+
+      - name: Delete temporary signing credentials
+        if: always()
+        run: |
+          rm -f "${SIGNING_CERTIFICATE_PATH:-}" "${APPLE_API_KEY_PATH:-}"
+          if [[ -n "${SIGNING_KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "$SIGNING_KEYCHAIN_PATH" || true
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retake-desktop-${{ matrix.asset }}
+          path: dist/*
+          if-no-files-found: error
+
   publish:
     name: Publish GitHub Release
-    needs: build
+    if: github.event_name == 'push'
+    needs: [build, build-desktop]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:

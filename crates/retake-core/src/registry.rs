@@ -20,6 +20,13 @@ impl RendererRegistry {
             .map(|b| b.as_ref())
     }
 
+    pub fn find_by_id(&self, id: &str) -> Option<&dyn Renderer> {
+        self.renderers
+            .iter()
+            .find(|renderer| renderer.id() == id)
+            .map(|renderer| renderer.as_ref())
+    }
+
     fn supports(&self, r: &dyn Renderer, target: &Target) -> bool {
         // simple dispatch by id matching target kind for initial
         match target.kind {
@@ -31,6 +38,7 @@ impl RendererRegistry {
             TargetKind::Pdf => r.id() == "pdf",
             TargetKind::Pencil => r.id() == "pencil",
             TargetKind::Video => r.id() == "video",
+            TargetKind::MacosWindow => r.id() == "macos_window",
         }
     }
 }

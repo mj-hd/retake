@@ -18,6 +18,7 @@ This document describes the target formats accepted by `open_review`, their capt
 | `pdf` | Local PDF | Vertical page document with page/text mapping |
 | `pencil` | Pencil MCP PNG export and node metadata | Exported frame with Pencil node mapping |
 | `video` | Local video file | Scrollable sampled storyboard with timecodes |
+| `macos_window` | Running macOS app name or `.app` path | Window PNG including its title bar |
 
 Web and local HTML targets are currently immutable image snapshots in the review UI, not live pages. Interactive archived HTML is feasible, but it requires a sandboxed second origin and stored page assets so untrusted page scripts never execute with access to the review API. Live rendering should remain an optional inspection mode; the frozen capture must remain the canonical revision, annotation, and diff surface.
 
@@ -71,6 +72,18 @@ Use `type: "adb"` for a connected Android device:
 - Captures the screen with `screencap` and maps elements with the UIAutomator tree at capture time.
 - The device is not contacted again when the review is submitted.
 - Set `RETAKE_ADB` when `adb` is not available on `PATH`.
+
+## macOS window
+
+```json
+{ "targets": [{ "type": "macos_window", "path": "Retake" }] }
+```
+
+- Set `path` to a running application name or a path such as `/Applications/Retake.app`.
+- When an app has multiple windows, narrow the match with `"metadata": { "window_title": "Retake" }`. You can also provide a numeric `window_id`.
+- Captures the frontmost matching window as a frozen PNG, including the title bar and excluding its shadow.
+- On first use, macOS requires Screen & System Audio Recording permission for the application hosting the MCP process.
+- Window IDs are transient. Comments resolve to capture-image coordinates, and revisions find the window again by application name and title.
 
 ## Source code
 

@@ -1,11 +1,11 @@
 use futures::future::join_all;
 use retake_core::{
-    Annotation, Generation, RenderError, Renderer, ReviewResult, Selection, SnapshotDraft,
+    Annotation, Generation, RenderError, ReviewResult, RuntimePaths, Selection, SnapshotDraft,
     StoredSnapshot, Target,
 };
 use retake_renderers::{
-    AdbRenderer, CodeRenderer, ImageRenderer, PdfRenderer, PencilRenderer, TextRenderer,
-    VideoRenderer, WebRenderer,
+    AdbRenderer, CodeRenderer, ImageRenderer, MacosWindowRenderer, PdfRenderer, PencilRenderer,
+    TextRenderer, VideoRenderer, WebRenderer,
 };
 use retake_store::{ReviewFeedback, ReviewMessage, ReviewRevision, ReviewStore, StoreError};
 use serde_json::json;
@@ -44,6 +44,7 @@ impl ReviewService {
     pub fn new(store: Arc<ReviewStore>, worker_path: Option<String>) -> Self {
         let mut reg = retake_core::RendererRegistry::new();
         reg.register(Box::new(ImageRenderer::new()));
+        reg.register(Box::new(MacosWindowRenderer::new()));
         reg.register(Box::new(TextRenderer::new()));
         reg.register(Box::new(AdbRenderer::new()));
         reg.register(Box::new(CodeRenderer::new(worker_path.clone())));
@@ -62,20 +63,29 @@ impl ReviewService {
         }
     }
 
-    /// Open a new browser process for this review only. Closing it cannot
-    /// affect existing windows or tabs in the user's normal browser.
+    /// Open an owned review window for this review only. A configured Tauri
+    /// desktop host is preferred; the Playwright browser remains the fallback.
     pub async fn open_browser(&self, review_id: &str, url: &str) -> anyhow::Result<()> {
-        let worker = self
-            .worker_path
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("browser worker not configured"))?;
-        let script = Path::new(worker).with_file_name("review-window.js");
-        if !script.is_file() {
-            anyhow::bail!("review browser worker not found");
-        }
-        let mut command = Command::new("node");
+        let runtime = RuntimePaths::discover();
+        let mut command = if let Some(desktop) = runtime.desktop_executable() {
+            let mut command = Command::new(desktop);
+            command.arg("--review-window");
+            command
+        } else {
+            let worker = self
+                .worker_path
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("browser worker not configured"))?;
+            let script = Path::new(worker).with_file_name("review-window.js");
+            if !script.is_file() {
+                anyhow::bail!("review browser worker not found");
+            }
+            let mut command = Command::new(runtime.node_executable());
+            runtime.configure_worker_command(&mut command);
+            command.arg(script);
+            command
+        };
         command
-            .arg(script)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null());
@@ -408,23 +418,10 @@ impl ReviewService {
                 .iter()
                 .find(|s| s.id == ra.snapshot_id)
                 .ok_or(RenderError::InvalidSelection)?;
-            let renderer: Box<dyn Renderer> = match snap.renderer_id.as_str() {
-                "image" => Box::new(ImageRenderer::new()),
-                "text" => Box::new(TextRenderer::new()),
-                "adb" => Box::new(AdbRenderer::new()),
-                "code" => Box::new(CodeRenderer::new(self.worker_path.clone())),
-                "pdf" => Box::new(PdfRenderer::new(self.worker_path.clone())),
-                "pencil" => Box::new(PencilRenderer::new()),
-                "video" => Box::new(VideoRenderer::new()),
-                "web" => {
-                    if let Some(wp) = &self.worker_path {
-                        Box::new(WebRenderer::new(wp.clone()))
-                    } else {
-                        return Err(RenderError::Unsupported);
-                    }
-                }
-                _ => return Err(RenderError::Unsupported),
-            };
+            let renderer = self
+                .registry
+                .find_by_id(&snap.renderer_id)
+                .ok_or(RenderError::Unsupported)?;
             let resolved = renderer.resolve(snap, &ra.selection)?;
             let ann = Annotation {
                 snapshot_id: ra.snapshot_id,
@@ -546,6 +543,47 @@ mod tests {
             .unwrap();
         let service = ReviewService::new(store, None);
         assert_eq!(service.wait_review(&id, 1).await.unwrap().status, "pending");
+    }
+
+    #[tokio::test]
+    async fn resolves_macos_window_annotations() {
+        let store = Arc::new(ReviewStore::new());
+        let snapshot = StoredSnapshot {
+            id: "window-snapshot".into(),
+            review_id: String::new(),
+            position: 0,
+            renderer_id: "macos_window".into(),
+            mapping_version: 1,
+            width: 820,
+            height: 680,
+            mime_type: "image/png".into(),
+            asset_path: String::new(),
+            source_label: "Retake — Retake".into(),
+            mapping_json: json!({
+                "version": 1,
+                "renderer": "macos_window",
+                "window_id": 42,
+                "owner": "Retake",
+                "title": "Retake"
+            })
+            .to_string(),
+        };
+        let id = store
+            .create_review(None, vec![(snapshot, Vec::new())], store.generate_token())
+            .unwrap();
+        let service = ReviewService::new(store, None);
+        let annotations = service
+            .resolve_annotations(
+                &id,
+                vec![RawAnnotation {
+                    snapshot_id: "window-snapshot".into(),
+                    selection: Selection::Point { x: 30.0, y: 40.0 },
+                    comment: "Remove this".into(),
+                }],
+            )
+            .await
+            .unwrap();
+        assert!(annotations[0].reference.contains("macOS window position"));
     }
 
     #[test]

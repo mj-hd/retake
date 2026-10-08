@@ -11,7 +11,7 @@ https://github.com/user-attachments/assets/ed6a4a67-906e-4bab-bbe7-f69023da4999
 - 画面上の範囲や位置を指定してコメント
 - エージェントによる修正状況をリアルタイムに確認
 - 過去リビジョンと最新版を左右比較、スライダー、ピクセル差分で確認
-- Web、HTML、Markdown、画像、テキスト、Android、コード、PDF、Pencil、動画をレビュー
+- Web、HTML、Markdown、画像、テキスト、Android、macOSウィンドウ、コード、PDF、Pencil、動画をレビュー
 
 対応形式と必要なツールは [レビュー対象とレンダラー](docs/RENDERERS.ja.md) を参照してください
 
@@ -168,6 +168,27 @@ ln -sfn "$RETAKE_ROOT/.agents/skills/retake" "$HOME/.gemini/skills/retake"
 ln -sfn "$RETAKE_ROOT/.agents/skills/retake" "$HOME/.config/opencode/skills/retake"
 ```
 
+### Tauriデスクトッププレビュー（macOS）
+
+既存のReact UIをTauriウィンドウで動かすデスクトップPoCは`ui/src-tauri`にあります
+
+```bash
+cd ui
+npm ci
+npm run desktop:build
+open src-tauri/target/release/bundle/macos/Retake.app
+```
+
+`desktop:build`はPlaywrightがインストールしたheadless Chromiumをアプリの非公開リソースとして同梱します。見つからない場合は、先に`workers/web-capture`で`npx playwright install chromium-headless-shell`を実行してください
+
+開発中のMCPサーバーでChromeの代わりにビルド済みRetake.appを使うには、アプリ内の実行ファイルを指定します
+
+```bash
+export RETAKE_DESKTOP_BIN="$RETAKE_ROOT/ui/src-tauri/target/release/bundle/macos/Retake.app/Contents/MacOS/retake-desktop"
+```
+
+デスクトップアプリはレビューURLをプロセス引数へ出さず、既存のbrowser workerと同じstdinプロトコルで受け取ります。環境変数を指定しない場合は、従来のPlaywrightウィンドウへフォールバックします
+
 ### 検証
 
 ```bash
@@ -175,12 +196,14 @@ cargo fmt -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cd ui && npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cd ../workers/web-capture && npm test
 ```
 
 ### リリース
 
-`v`で始まるタグをpushすると、GitHub Actionsが対応プラットフォームのarchiveとSHA-256 checksumを作成し、GitHub Releaseへ公開します
+`v`で始まるタグをpushすると、GitHub ActionsがCLI archiveとSHA-256 checksumに加え、Developer IDで署名・Apple公証したmacOS版DMG（Apple Silicon / Intel）を作成し、GitHub Releaseへ公開します
 
 ```bash
 git tag v0.1.0

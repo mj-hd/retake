@@ -6,6 +6,7 @@ target/
 # Node / UI
 node_modules/
 dist/
+/ui/src-tauri/resources/
 *.local
 .vite/
 *.tsbuildinfo

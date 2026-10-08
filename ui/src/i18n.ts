@@ -169,9 +169,13 @@ export const messages: Record<Locale, Messages> = {
 };
 
 export function initialLocale(): Locale {
-  const stored = localStorage.getItem('retake.locale');
-  if (stored === 'ja' || stored === 'en') return stored;
-  return navigator.language.toLowerCase().startsWith('ja') ? 'ja' : 'en';
+  try {
+    const stored = localStorage.getItem('retake.locale');
+    if (stored === 'ja' || stored === 'en') return stored;
+  } catch {
+    // Storage can be unavailable on custom origins such as tauri://.
+  }
+  return navigator.language?.toLowerCase().startsWith('ja') ? 'ja' : 'en';
 }
 
 export function formatDateTime(value: string, locale: Locale): string {

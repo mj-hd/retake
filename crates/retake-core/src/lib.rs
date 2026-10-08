@@ -1,6 +1,8 @@
 pub mod registry;
+pub mod runtime;
 
 pub use registry::RendererRegistry;
+pub use runtime::RuntimePaths;
 
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +50,7 @@ pub enum TargetKind {
     Pdf,
     Pencil,
     Video,
+    MacosWindow,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

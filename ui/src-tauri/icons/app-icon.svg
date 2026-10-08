@@ -1,0 +1,14 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Keep the app tile at the standard 824 × 824 size. -->
+  <rect x="100" y="100" width="824" height="824" rx="161" fill="#F4F4F6" />
+  <!-- The black frame occupies about 70% of the tile, leaving clear breathing room. -->
+  <g transform="translate(185.6 185.6) scale(5.1)">
+    <g stroke="#191A20" stroke-width="17" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M49 16H31A15 15 0 0 0 16 31V49" />
+      <path d="M79 16H97A15 15 0 0 1 112 31V49" />
+      <path d="M49 112H31A15 15 0 0 1 16 97V79" />
+      <path d="M79 112H97A15 15 0 0 0 112 97V79" />
+    </g>
+    <circle cx="64" cy="64" r="26" fill="#FC4649" />
+  </g>
+</svg>

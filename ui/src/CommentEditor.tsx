@@ -1,5 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { ChangeEvent, KeyboardEvent, PointerEvent, RefObject } from 'react';
+import { shouldSubmitComment } from './commentEditorModel.ts';
 import { messages } from './i18n.ts';
 import { useReviewStore } from './reviewStore.ts';
 
@@ -14,9 +15,23 @@ export default function CommentEditor({ textareaRef, onSubmit }: Props) {
   const setComment = useReviewStore((state) => state.setComment);
   const setDraft = useReviewStore((state) => state.setDraft);
   const t = messages[locale];
+  const composingRef = useRef(false);
+  const compositionEndedAtRef = useRef(0);
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      const nativeEvent = event.nativeEvent;
+      if (
+        shouldSubmitComment(
+          {
+            key: event.key,
+            shiftKey: event.shiftKey,
+            isComposing: nativeEvent.isComposing,
+            keyCode: nativeEvent.keyCode,
+          },
+          composingRef.current,
+          performance.now() - compositionEndedAtRef.current < 200,
+        )
+      ) {
         event.preventDefault();
         onSubmit();
       }
@@ -30,6 +45,14 @@ export default function CommentEditor({ textareaRef, onSubmit }: Props) {
     (event: ChangeEvent<HTMLTextAreaElement>) => setComment(event.target.value),
     [setComment],
   );
+  const startComposition = useCallback(() => {
+    composingRef.current = true;
+    compositionEndedAtRef.current = 0;
+  }, []);
+  const endComposition = useCallback(() => {
+    composingRef.current = false;
+    compositionEndedAtRef.current = performance.now();
+  }, []);
   return (
     <div className="comment-editor" onPointerDown={stopPointerPropagation}>
       <div className="editor-title">
@@ -43,6 +66,8 @@ export default function CommentEditor({ textareaRef, onSubmit }: Props) {
         value={comment}
         onChange={updateComment}
         onKeyDown={onKeyDown}
+        onCompositionStart={startComposition}
+        onCompositionEnd={endComposition}
         placeholder={t.placeholder}
         rows={2}
       />
