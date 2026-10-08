@@ -1,6 +1,6 @@
 [package]
 name = "retake-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "Retake desktop review host"
 authors = ["retake"]
 license = "MIT"
