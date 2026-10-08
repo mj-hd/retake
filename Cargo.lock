@@ -1981,7 +1981,7 @@ dependencies = [
 
 [[package]]
 name = "retake-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1997,7 +1997,7 @@ dependencies = [
 
 [[package]]
 name = "retake-renderers"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -2021,7 +2021,7 @@ dependencies = [
 
 [[package]]
 name = "retake-server"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2050,7 +2050,7 @@ dependencies = [
 
 [[package]]
 name = "retake-store"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "hex",
