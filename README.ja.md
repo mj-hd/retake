@@ -17,9 +17,22 @@ https://github.com/user-attachments/assets/ed6a4a67-906e-4bab-bbe7-f69023da4999
 
 ## インストール
 
-Node.js 20以降、npm、curlが必要です
+### 選択肢1：macOSデスクトップアプリ（推奨）
 
-### 1. ビルド済みバイナリをインストール（推奨）
+1. [GitHub Releasesの最新版](https://github.com/mj-hd/retake/releases/latest)からMacに合うDMGをダウンロードします
+   - Apple Silicon（`arm64`）：`Retake_*_macos-aarch64.dmg`
+   - Intel（`x86_64`）：`Retake_*_macos-x86_64.dmg`
+2. DMGを開き、`Retake.app`を「アプリケーション」フォルダへコピーします
+3. 「アプリケーション」からRetakeを起動し、利用するエージェントの「インストール」、または「すべてインストール」をクリックします
+4. インストールしたエージェントを再起動します
+
+デスクトップアプリはRetakeの実行環境を内蔵し、MCPの登録と対応するCLIエージェントへのSkillのインストールを行うため、下記のCLI設定は不要です。DMGをマウントしたまま直接登録すると、エージェントの設定が一時的なマウント先を参照してしまうため、必ず「アプリケーション」へコピーしてから起動・登録してください。
+
+### 選択肢2：CLI（macOS / Linux）
+
+CLI版のインストールにはNode.js 20以降、npm、curlが必要です。
+
+#### 1. ビルド済みバイナリをインストール
 
 GitHub ReleasesからOS・CPUに合うビルドを取得し、`~/.local/share/retake`へインストールします。macOS（Apple Silicon / Intel）とLinux（arm64 / x86_64）に対応しています
 
@@ -54,7 +67,7 @@ cargo build --release -p retake-server
 
 </details>
 
-### 2. Skillのインストール
+#### 2. Skillのインストール
 
 同梱のスキルは [Agent Skills](https://agentskills.io/) 形式です。複数のエージェントへまとめて導入する場合は [`skills`](https://github.com/vercel-labs/skills) が簡単です
 
@@ -74,7 +87,7 @@ claude plugin install retake@retake
 
 Claude Codeに対しては、`skills`とプラグインのどちらか一方を選んでください
 
-### 3. MCPを登録
+#### 3. MCPを登録
 
 以下はビルド済みバイナリ版のコマンドです。ソースビルドの場合は、コマンド中の`$HOME/.local/bin/retake`を`$RETAKE_ROOT/target/release/retake`へ置き換えてください。UIとworkerは実行ファイルの位置から自動検出されます
 

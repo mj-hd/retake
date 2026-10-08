@@ -17,9 +17,22 @@ See [Review targets and renderers](docs/RENDERERS.md) for supported formats and 
 
 ## Installation
 
-Node.js 20 or later, npm, and curl are required
+### Option 1: macOS desktop app (recommended)
 
-### 1. Install a prebuilt binary (recommended)
+1. Download the DMG for your Mac from the [latest GitHub Release](https://github.com/mj-hd/retake/releases/latest):
+   - Apple Silicon (`arm64`): `Retake_*_macos-aarch64.dmg`
+   - Intel (`x86_64`): `Retake_*_macos-x86_64.dmg`
+2. Open the DMG and copy `Retake.app` to the Applications folder
+3. Launch Retake from Applications and click **Install** for the agents you use, or **Install all**
+4. Restart those agents after installation
+
+The desktop app bundles the Retake runtime, registers its MCP server, and installs the Skill for supported CLI agents, so the separate CLI setup below is not required. Be sure to copy the app to Applications before registering it; launching and registering it directly from the mounted DMG leaves agent settings pointing at the temporary mounted volume.
+
+### Option 2: CLI (macOS and Linux)
+
+Node.js 20 or later, npm, and curl are required for the CLI installation.
+
+#### 1. Install a prebuilt binary
 
 The installer downloads the build for your OS and CPU from GitHub Releases and installs it under `~/.local/share/retake`. macOS (Apple Silicon and Intel) and Linux (arm64 and x86_64) are supported
 
@@ -54,7 +67,7 @@ cargo build --release -p retake-server
 
 </details>
 
-### 2. Install the Skill
+#### 2. Install the Skill
 
 The bundled skill follows the [Agent Skills](https://agentskills.io/) standard. The easiest multi-agent installation uses [`skills`](https://github.com/vercel-labs/skills):
 
@@ -74,7 +87,7 @@ claude plugin install retake@retake
 
 Choose either `skills` or the Claude plugin for Claude Code; installing both is unnecessary.
 
-### 3. Register the MCP server
+#### 3. Register the MCP server
 
 The commands below use the prebuilt binary. For a source build, replace `$HOME/.local/bin/retake` in the command with `$RETAKE_ROOT/target/release/retake`. The UI and worker are discovered automatically from the executable location
 
